@@ -1,7 +1,7 @@
 // ROOT · guarda el juego en el teléfono para poder jugar sin conexión.
 // La página principal siempre se pide primero a internet (para recibir actualizaciones);
 // las librerías, fuentes e íconos se sirven desde la copia guardada.
-const CACHE = 'root-1.2.0';
+const CACHE = 'root-1.3.0';
 const CORE = [
   './',
   './index.html',

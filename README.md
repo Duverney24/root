@@ -21,9 +21,15 @@ Aventura de supervivencia en tercera persona. Noventa y siete años después del
 | Acción | E (mantener para usar) | Acción (mantener para usar) |
 | Menú | P | Menú |
 
+## Rendimiento
+
+- La resolución se ajusta sola para sostener 60 FPS: baja si el teléfono no alcanza y vuelve a subir cuando sobra.
+- Si aun así no alcanza, la calidad baja un nivel (solo si no la elegiste a mano en el menú).
+- En **Menú → Ver FPS** se muestra el contador y el porcentaje de resolución en uso.
+
 ## Cómo se actualiza
 
-1. Los cambios del juego van en `index.html` (subir `ROOT_VERSION` en cada versión).
+1. Los cambios del juego van en `index.html`. En cada versión, subir `ROOT_VERSION` en `index.html` y `CACHE` en `sw.js` al mismo número, para que los teléfonos descarguen las librerías nuevas.
 2. Al subirlos a `main`, GitHub Pages publica la nueva versión en unos minutos y la app la recibe sola.
 3. Solo cuando cambia la app en sí (carpeta `android/`), se crea una etiqueta `vX.Y.Z` y la acción **Armar APK** genera el APK firmado en Releases.
 
