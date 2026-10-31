@@ -1,0 +1,72 @@
+name: Publicar
+
+# Cada cambio que se sube se revisa y, si está bien, se publica solo:
+#  1. pasa a main (si se subió a una rama claude/…)
+#  2. GitHub Pages actualiza el juego: la app y la web lo reciben al abrirse
+#  3. si ROOT_VERSION es nueva, se arma el APK y se publica en Releases
+on:
+  push:
+    branches: ['main', 'claude/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      apk: ${{ steps.ver.outputs.apk }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Revisar el juego
+        run: node scripts/revisar.js
+
+      - name: Llevar el cambio a main
+        if: github.ref_name != 'main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B main origin/main
+          git merge --ff-only "$GITHUB_SHA" || git merge --no-edit -m "Publicar cambios de $GITHUB_REF_NAME" "$GITHUB_SHA"
+          git push origin main
+
+      - name: Actualizar GitHub Pages
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" > /dev/null && echo "Publicación pedida a GitHub Pages"
+
+      - name: ¿Hay versión nueva de la app?
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(grep -oE "ROOT_VERSION='[0-9]+\.[0-9]+\.[0-9]+'" index.html | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "v$V" > /dev/null 2>&1; then
+            echo "apk=no" >> "$GITHUB_OUTPUT"; echo "El APK v$V ya está publicado"
+          else
+            echo "apk=si" >> "$GITHUB_OUTPUT"; echo "Versión nueva: se arma el APK v$V"
+          fi
+
+  apk:
+    needs: publicar
+    if: needs.publicar.outputs.apk == 'si'
+    uses: ./.github/workflows/apk.yml
+    with:
+      version: ${{ needs.publicar.outputs.version }}
+    secrets: inherit

@@ -58,10 +58,12 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  e.respondWith(
-    caches.match(req).then(hit => hit || fetch(req).then(res => {
-      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+  e.respondWith(caches.open(CACHE).then(c => c.match(req).then(hit => {
+    const red = fetch(req, { cache: 'no-cache' }).then(res => {
+      if (res.ok) c.put(req, res.clone());
       return res;
-    }))
-  );
+    });
+    if (hit) { e.waitUntil(red.catch(() => {})); return hit; }
+    return red;
+  })));
 });

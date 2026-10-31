@@ -29,9 +29,14 @@ Aventura de supervivencia en tercera persona. Noventa y siete años después del
 
 ## Cómo se actualiza
 
-1. Los cambios del juego van en `index.html`. En cada versión, subir `ROOT_VERSION` en `index.html` y `CACHE` en `sw.js` al mismo número, para que los teléfonos descarguen las librerías nuevas.
-2. Al subirlos a `main`, GitHub Pages publica la nueva versión en unos minutos y la app la recibe sola.
-3. Solo cuando cambia la app en sí (carpeta `android/`), se crea una etiqueta `vX.Y.Z` y la acción **Armar APK** genera el APK firmado en Releases.
+Todo es automático con la acción **Publicar** (`.github/workflows/publicar.yml`). Cada vez que se sube un cambio a `main` o a una rama `claude/…`:
+
+1. Se revisa el juego (`scripts/revisar.js`). Si tiene errores, no se publica nada.
+2. El cambio pasa a `main` y GitHub Pages publica la nueva versión en unos minutos.
+3. La app de Android y la web la reciben solas la próxima vez que se abren con internet.
+4. Si `ROOT_VERSION` en `index.html` es un número nuevo, se arma el APK firmado y se publica en Releases como `vX.Y.Z`.
+
+Para que el APK se firme, el repositorio necesita los secretos `KEYSTORE_B64` (la llave `root.keystore` en base64) y `KEYSTORE_PASS` (Settings → Secrets and variables → Actions). Sin ellos, la web se publica igual y la acción solo avisa.
 
 ## Estructura
 
@@ -40,5 +45,7 @@ Aventura de supervivencia en tercera persona. Noventa y siete años después del
 - `sw.js`, `manifest.webmanifest`: modo sin conexión e instalación como app web.
 - `android/`: la app de Android (pantalla que muestra el juego).
 - `scripts/build_apk.sh`: arma y firma el APK.
+- `scripts/revisar.js`: revisión antes de publicar.
+- `.github/workflows/`: publicación automática y armado del APK.
 
 Créditos: [Three.js](https://threejs.org) (MIT), tipografías Big Shoulders Stencil Display y Chakra Petch (SIL Open Font License).

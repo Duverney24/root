@@ -1,11 +1,16 @@
 name: Armar APK
 
-# Se ejecuta al publicar una versión (etiqueta v1.2.0, v1.3.0, …)
-# o a mano desde la pestaña Actions.
+# Normalmente la llama "Publicar" cuando cambia ROOT_VERSION.
+# También se puede ejecutar a mano desde la pestaña Actions o con una etiqueta v1.2.3.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
 
 permissions:
   contents: write
@@ -15,39 +20,57 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version != '' && 'main' || github.ref }}
+
+      - name: Revisar la llave de firma
+        id: llave
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASS" ]; then
+            echo "::warning::Faltan los secretos KEYSTORE_B64 y KEYSTORE_PASS: no se puede firmar el APK. El juego web sí quedó publicado."
+            echo "ok=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=si" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-java@v4
+        if: steps.llave.outputs.ok == 'si'
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Descargar herramientas
+        if: steps.llave.outputs.ok == 'si'
         run: |
           mkdir -p tools
           curl -sSL -o tools/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
           curl -sSL -o tools/signer.jar https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
 
-      - name: Preparar la llave de firma
+      - name: Armar y firmar
+        if: steps.llave.outputs.ok == 'si'
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
-        run: echo "$KEYSTORE_B64" | base64 -d > root.keystore
-
-      - name: Armar y firmar
-        env:
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
-        run: bash scripts/build_apk.sh
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > root.keystore
+          bash scripts/build_apk.sh
 
       - name: Guardar el APK
+        if: steps.llave.outputs.ok == 'si'
         uses: actions/upload-artifact@v4
         with:
           name: ROOT-apk
           path: dist/*.apk
 
       - name: Publicar en Releases
-        if: startsWith(github.ref, 'refs/tags/')
+        if: steps.llave.outputs.ok == 'si' && (inputs.version != '' || startsWith(github.ref, 'refs/tags/'))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.apk \
-            --title "ROOT $GITHUB_REF_NAME" \
+          TAG=${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref_name }}
+          gh release create "$TAG" dist/*.apk --target main \
+            --title "ROOT $TAG" \
             --notes "Descarga el APK de abajo e instálalo en tu Android. Si ya tienes ROOT instalado, se actualiza encima sin perder nada."
