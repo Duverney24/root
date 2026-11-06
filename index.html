@@ -231,6 +231,8 @@ canvas#game{position:fixed;inset:0;width:100%;height:100%;display:block;touch-ac
       <button class="btn ghost" id="sound" type="button">Sonido: sí</button>
       <button class="btn ghost" id="rainBtn" type="button">Lluvia: no</button>
       <button class="btn ghost" id="fpsBtn" type="button">Ver FPS: no</button>
+      <button class="btn ghost" id="pNoAds" type="button" hidden>Quitar anuncios</button>
+      <button class="btn ghost" id="pPriv" type="button" hidden>Privacidad de anuncios</button>
       <button class="btn ghost" id="pExit" type="button">Salir al inicio</button>
     </div>
   </div>
@@ -246,7 +248,7 @@ canvas#game{position:fixed;inset:0;width:100%;height:100%;display:block;touch-ac
 <script>
 (function(){
 'use strict';
-const ROOT_VERSION='1.3.1';
+const ROOT_VERSION='1.4.0';
 if('serviceWorker' in navigator&&location.protocol==='https:'&&/github\.io$/.test(location.hostname)){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 const $=id=>document.getElementById(id);
 const isTouch=window.matchMedia('(pointer: coarse)').matches;
@@ -1372,8 +1374,13 @@ function hurt(n){
 }
 function knockout(){
   state='ko';$('fade').classList.add('on');tone(90,1.2,.18,'sine');
-  setTimeout(()=>{teleport(CITY_EDGE.x,CITY_EDGE.z,PHARM.x,PHARM.z);P.hp=100;resetJaguar();P.crouch=true;syncCrouch();state='play';$('fade').classList.remove('on');
-    sayLines([['Inés','Eso estuvo cerca. Agachada y detrás de los edificios no me ve.']]);},1900);
+  const volver=()=>{teleport(CITY_EDGE.x,CITY_EDGE.z,PHARM.x,PHARM.z);P.hp=100;resetJaguar();P.crouch=true;syncCrouch();state='play';$('fade').classList.remove('on');clock.getDelta();
+    sayLines([['Inés','Eso estuvo cerca. Agachada y detrás de los edificios no me ve.']]);};
+  // en la app de Android: un anuncio con recompensa deja seguir desde donde caíste
+  if(NATIVO&&natEst.recompensa)setTimeout(()=>ofrecerSeguir(()=>adRecompensa(ok=>{if(!ok){volver();return;}
+    P.hp=100;resetJaguar();P.crouch=true;syncCrouch();state='play';$('fade').classList.remove('on');clock.getDelta();
+    sayLines([['Inés','Me levanto. Agachada y en silencio, esta vez no me va a ver.']]);}),volver),1200);
+  else setTimeout(volver,1900);
 }
 
 /* ================= hora del día ================= */
@@ -1568,7 +1575,7 @@ function tryNext(){
   if(pendingNext<0)return;
   if(state==='paused'||state==='ko'){setTimeout(tryNext,500);return;}
   const n=pendingNext;pendingNext=-1;
-  if(n<MISSIONS.length)showMissionCard(n,true);else showEpilogue();
+  adEntreMisiones(n,()=>{if(n<MISSIONS.length)showMissionCard(n,true);else showEpilogue();});
 }
 function renderObjectives(){
   if(!M)return;
@@ -1728,6 +1735,57 @@ function toggleRain(){rainTarget=rainTarget>.5?0:1;$('rainBtn').textContent='Llu
 function pause(){if(state!=='play')return;state='paused';if(document.exitPointerLock)document.exitPointerLock();$('pauseInfo').textContent=(M?`Misión ${mi+1} · ${M.title}`:'Pausa')+' · v'+ROOT_VERSION;$('rainBtn').textContent='Lluvia: '+(rainTarget?'sí':'no');$('pause').hidden=false;}
 function resume(){$('pause').hidden=true;state='play';clock.getDelta();}
 $('menuBtn').addEventListener('click',pause);
+
+/* ================= app de Android: anuncios y compra ================= */
+// Solo existe dentro de la app de Android (window.RootNativo). En la web no hay anuncios.
+const NATIVO=window.RootNativo||null;
+const AD_CADA=180;// segundos mínimos entre dos anuncios entre misiones
+let natEst={},adEspera=null,adGuardia=0,adUltimo=0;
+function natLeer(){
+  if(!NATIVO)return;
+  try{natEst=JSON.parse(NATIVO.estado())||{};}catch(e){natEst={};}
+  const b=$('pNoAds');b.hidden=!(natEst.anuncios&&natEst.precio);if(!b.hidden)b.textContent='Quitar anuncios · '+natEst.precio;
+  $('pPriv').hidden=!natEst.privacidad;
+}
+function adFin(ok){
+  const f=adEspera;adEspera=null;clearTimeout(adGuardia);
+  try{if(actx&&!document.hidden)actx.resume();}catch(e){}
+  if(f)f(!!ok);
+}
+function adPedir(fn,llamar){
+  adEspera=fn;try{if(actx)actx.suspend();}catch(e){}
+  adGuardia=setTimeout(()=>adFin(false),120000);// por si la app nunca responde
+  llamar();
+}
+window.rootNativoEvento=(ev,d)=>{
+  if(ev==='estado')natLeer();
+  else if(ev==='intersticial')adFin(true);
+  else if(ev==='recompensa')adFin(d&&d.ok);
+  else if(ev==='compra'){natLeer();if(d&&d.ok)toast('Gracias por tu apoyo: ya no verás anuncios');}
+};
+// Entre misiones: nunca antes de la misión 3 y como mucho uno cada tres minutos.
+function adEntreMisiones(n,fn){
+  const reciente=adUltimo&&performance.now()-adUltimo<AD_CADA*1000;
+  if(!NATIVO||!natEst.anuncios||n<2||adEspera||reciente){fn();return;}
+  adUltimo=performance.now();state='card';hideHud();
+  adPedir(()=>fn(),()=>NATIVO.intersticial());
+}
+function adRecompensa(fn){
+  if(!NATIVO||!natEst.recompensa||adEspera){fn(false);return;}
+  adPedir(fn,()=>NATIVO.recompensa());
+}
+function ofrecerSeguir(seguir,volver){
+  $('stEyebrow').textContent=`Misión ${mi+1}`;$('stTitle').textContent='El jaguar te alcanzó';
+  $('stBody').innerHTML='<p>Mira un anuncio corto y sigue desde aquí con la vida llena, o vuelve al borde de la ciudad.</p>';
+  $('stStats').hidden=true;const row=$('stButtons');row.innerHTML='';
+  [['Ver anuncio y seguir aquí',seguir],['Volver al borde',volver,true]].forEach(([label,fn,ghost])=>{
+    const b=document.createElement('button');b.type='button';b.className='btn'+(ghost?' ghost':'');b.textContent=label;
+    b.addEventListener('click',()=>{$('story').hidden=true;fn();});row.appendChild(b);});
+  $('story').hidden=false;
+}
+$('pNoAds').addEventListener('click',()=>{if(NATIVO)NATIVO.comprar();});
+$('pPriv').addEventListener('click',()=>{if(NATIVO)NATIVO.privacidad();});
+natLeer();
 $('pResume').addEventListener('click',resume);
 $('pRestart').addEventListener('click',()=>{$('pause').hidden=true;hideHud();startMission(mi,false);});
 $('pExit').addEventListener('click',()=>location.reload());

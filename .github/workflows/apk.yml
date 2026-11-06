@@ -42,18 +42,17 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Descargar herramientas
+      - uses: gradle/actions/setup-gradle@v4
         if: steps.llave.outputs.ok == 'si'
-        run: |
-          mkdir -p tools
-          curl -sSL -o tools/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
-          curl -sSL -o tools/signer.jar https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
 
       - name: Armar y firmar
         if: steps.llave.outputs.ok == 'si'
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_INTERSTICIAL: ${{ secrets.ADMOB_INTERSTICIAL }}
+          ADMOB_RECOMPENSA: ${{ secrets.ADMOB_RECOMPENSA }}
         run: |
           echo "$KEYSTORE_B64" | base64 -d > root.keystore
           bash scripts/build_apk.sh
@@ -62,8 +61,8 @@ jobs:
         if: steps.llave.outputs.ok == 'si'
         uses: actions/upload-artifact@v4
         with:
-          name: ROOT-apk
-          path: dist/*.apk
+          name: ROOT-android
+          path: dist/*
 
       - name: Publicar en Releases
         if: steps.llave.outputs.ok == 'si' && (inputs.version != '' || startsWith(github.ref, 'refs/tags/'))
@@ -71,6 +70,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG=${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref_name }}
-          gh release create "$TAG" dist/*.apk --target main \
+          gh release create "$TAG" dist/*.apk dist/*.aab --target main \
             --title "ROOT $TAG" \
-            --notes "Descarga el APK de abajo e instálalo en tu Android. Si ya tienes ROOT instalado, se actualiza encima sin perder nada."
+            --notes "Descarga el APK de abajo e instálalo en tu Android. Si ya tienes ROOT instalado, se actualiza encima sin perder nada. El archivo .aab es el que se sube a Google Play Console."

@@ -38,13 +38,35 @@ Todo es automático con la acción **Publicar** (`.github/workflows/publicar.yml
 
 Para que el APK se firme, el repositorio necesita los secretos `KEYSTORE_B64` (la llave `root.keystore` en base64) y `KEYSTORE_PASS` (Settings → Secrets and variables → Actions). Sin ellos, la web se publica igual y la acción solo avisa.
 
+Cada versión publica en Releases el APK (para instalar a mano) y el AAB (el que se sube a Google Play Console).
+
+## Anuncios y compra
+
+Solo en la app de Android; la web no tiene anuncios.
+
+- **Entre misiones**: un anuncio de pantalla completa, nunca antes de la misión 3 y como mucho uno cada tres minutos.
+- **Con recompensa**: si el jaguar te alcanza, puedes ver un anuncio y seguir desde ahí en vez de volver al borde de la ciudad.
+- **Quitar anuncios**: compra única en Google Play (Menú → Quitar anuncios). Se recupera sola en otro teléfono con la misma cuenta.
+- **Privacidad**: la app pide el consentimiento donde la ley lo exige; se cambia en Menú → Privacidad de anuncios. Política: https://duverney24.github.io/root/privacidad.html
+
+Para activarlos, agrega estos secretos en el repositorio y sube `ROOT_VERSION`:
+
+| Secreto | Qué es |
+| --- | --- |
+| `ADMOB_APP_ID` | ID de la app en AdMob (`ca-app-pub-…~…`) |
+| `ADMOB_INTERSTICIAL` | Bloque de anuncios intersticial (`ca-app-pub-…/…`) |
+| `ADMOB_RECOMPENSA` | Bloque de anuncios bonificado (`ca-app-pub-…/…`) |
+
+Sin ellos la app sale sin anuncios. En Play Console, el producto integrado en la aplicación debe tener el ID `quitar_anuncios`. La compra solo funciona si la app se instaló desde Google Play.
+
 ## Estructura
 
 - `index.html`: el juego completo (Three.js).
 - `libs/`, `fonts/`: librerías y tipografías locales, para que funcione sin internet.
 - `sw.js`, `manifest.webmanifest`: modo sin conexión e instalación como app web.
-- `android/`: la app de Android (pantalla que muestra el juego).
-- `scripts/build_apk.sh`: arma y firma el APK.
+- `android/`: la app de Android (proyecto Gradle): la pantalla que muestra el juego, los anuncios (`Anuncios.java`), la compra (`Tienda.java`) y el puente con el juego (`Puente.java`).
+- `privacidad.html`: política de privacidad (la pide Google Play).
+- `scripts/build_apk.sh`: arma y firma el APK y el AAB.
 - `scripts/revisar.js`: revisión antes de publicar.
 - `.github/workflows/`: publicación automática y armado del APK.
 

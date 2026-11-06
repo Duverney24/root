@@ -1,0 +1,87 @@
+// ROOT · app de Android: una pantalla que muestra el juego, con anuncios
+// (AdMob) y la compra única "Quitar anuncios" (Google Play Billing).
+//
+// La versión sale de ROOT_VERSION en index.html. Los códigos de AdMob y la
+// llave de firma llegan por variables de entorno (secretos de GitHub):
+//   ADMOB_APP_ID, ADMOB_INTERSTICIAL, ADMOB_RECOMPENSA
+//   KEYSTORE_FILE, KEYSTORE_PASS
+// Sin los códigos de AdMob la app funciona igual, pero sin anuncios.
+plugins {
+    id 'com.android.application'
+}
+
+def html = file('../../index.html').getText('UTF-8')
+def m = html =~ /ROOT_VERSION='(\d+)\.(\d+)\.(\d+)'/
+if (!m.find()) throw new GradleException('No se encontró ROOT_VERSION en index.html')
+def versionNombre = "${m.group(1)}.${m.group(2)}.${m.group(3)}"
+def versionCodigo = m.group(1).toInteger() * 10000 + m.group(2).toInteger() * 100 + m.group(3).toInteger()
+
+def env = { String k -> (System.getenv(k) ?: '').trim() }
+def admobApp = env('ADMOB_APP_ID')
+def admobInter = env('ADMOB_INTERSTICIAL')
+def admobRecompensa = env('ADMOB_RECOMPENSA')
+def hayAnuncios = admobApp && (admobInter || admobRecompensa)
+// AdMob exige un código de app en el manifiesto aunque no se muestren anuncios:
+// sin código propio se usa el de muestra de Google y los anuncios quedan apagados.
+if (!hayAnuncios) admobApp = 'ca-app-pub-3940256099942544~3347511713'
+
+android {
+    namespace 'com.raiz.juego'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.raiz.juego'
+        minSdk 24
+        targetSdk 36
+        versionCode versionCodigo
+        versionName versionNombre
+        manifestPlaceholders = [admobAppId: admobApp]
+        buildConfigField 'boolean', 'ANUNCIOS', hayAnuncios ? 'true' : 'false'
+        buildConfigField 'String', 'AD_INTERSTICIAL', "\"${hayAnuncios ? admobInter : ''}\""
+        buildConfigField 'String', 'AD_RECOMPENSA', "\"${hayAnuncios ? admobRecompensa : ''}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        release {
+            def ks = env('KEYSTORE_FILE') ?: '../../root.keystore'
+            storeFile file(ks)
+            storePassword env('KEYSTORE_PASS')
+            keyAlias 'raiz'
+            keyPassword env('KEYSTORE_PASS')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    lint {
+        // Que una advertencia de lint no frene la publicación del APK.
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        // La copia del juego que viene dentro de la app (para jugar sin internet)
+        // la pone scripts/build_apk.sh en build/juego.
+        main.assets.srcDirs += [layout.buildDirectory.dir('juego').get().asFile]
+    }
+}
+
+dependencies {
+    implementation 'com.google.android.gms:play-services-ads:24.4.0'
+    implementation 'com.google.android.ump:user-messaging-platform:3.2.0'
+    implementation 'com.android.billingclient:billing:8.0.0'
+}
